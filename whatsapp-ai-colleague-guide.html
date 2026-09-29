@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp AI 同事 — 整合說明書</title>
+<style>
+  :root {
+    --bg:#0f172a; --panel:#1e293b; --panel2:#273449; --border:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --ok:#34d399;
+    --danger:#f87171; --warn:#fbbf24;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,"PingFang TC","Microsoft JhengHei","Segoe UI",sans-serif; line-height:1.7; }
+  header { padding:40px 32px 28px; border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#0b1220,var(--bg)); }
+  header h1 { margin:0 0 8px; font-size:28px; }
+  header p { margin:0; color:var(--muted); font-size:15px; }
+  .badge { display:inline-block; padding:3px 12px; border-radius:999px; font-size:12px;
+    margin:14px 8px 0 0; border:1px solid var(--border); background:var(--panel); }
+  .toc { padding:22px 32px; border-bottom:1px solid var(--border); }
+  .toc a { color:var(--accent); text-decoration:none; margin-right:16px; font-size:13px;
+    display:inline-block; margin-bottom:6px; }
+  main { max-width:940px; margin:0 auto; padding:24px 32px 80px; }
+  section { background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:26px; margin-bottom:26px; }
+  h2 { margin:0 0 4px; font-size:20px; color:var(--accent);
+    border-left:4px solid var(--accent); padding-left:12px; }
+  h3 { font-size:16px; margin:22px 0 8px; color:#c7d7f0; }
+  .desc { color:var(--muted); font-size:14px; margin:8px 0 16px; }
+  pre { background:#0b1220; border:1px solid var(--border); border-radius:8px;
+    padding:14px 16px; overflow-x:auto; font-size:13px; line-height:1.6; }
+  code { font-family:"SF Mono",Menlo,Consolas,monospace; }
+  pre code { color:#a5f3fc; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; background:var(--panel2); white-space:nowrap; }
+  .step { display:flex; gap:14px; margin:18px 0; }
+  .step .num { flex:none; width:30px; height:30px; border-radius:50%; background:var(--accent);
+    color:#0b1220; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .step .body { flex:1; }
+  .note { background:rgba(56,189,248,.08); border:1px solid rgba(56,189,248,.3);
+    border-radius:8px; padding:12px 16px; font-size:13px; color:var(--muted); margin:12px 0; }
+  .warn { background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.3);
+    border-radius:8px; padding:12px 16px; font-size:13px; color:#fcd34d; margin:12px 0; }
+  .danger { background:rgba(248,113,113,.08); border:1px solid rgba(248,113,113,.3);
+    border-radius:8px; padding:12px 16px; font-size:13px; color:#fca5a5; margin:12px 0; }
+  .ok { background:rgba(52,211,153,.08); border:1px solid rgba(52,211,153,.3);
+    border-radius:8px; padding:12px 16px; font-size:13px; color:#6ee7b7; margin:12px 0; }
+  kbd { background:var(--panel2); border:1px solid var(--border); border-radius:4px;
+    padding:1px 6px; font-size:12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>WhatsApp AI 同事 — 整合說明書</h1>
+  <p>把 WhatsApp 群組問答 bot 與 Claude Code 的 DeepSeek / Kimi 模型後端連接，並啟用持久化上文下理</p>
+  <span class="badge">Node.js ≥ 18</span>
+  <span class="badge">Docker 可選</span>
+  <span class="badge">6 種模型可切換</span>
+  <span class="badge">上下文持久化</span>
+</header>
+
+<nav class="toc">
+  <a href="#what">0. 這次整合做了什麼</a>
+  <a href="#providers">1. 支援的模型</a>
+  <a href="#req">2. 前置需求</a>
+  <a href="#install">3. 安裝流程</a>
+  <a href="#env">4. 設定 .env</a>
+  <a href="#start">5. 啟動登入</a>
+  <a href="#docker">6. Docker 部署</a>
+  <a href="#verify">7. 驗證</a>
+  <a href="#manual">8. 使用手冊</a>
+  <a href="#faq">9. 常見問題</a>
+</nav>
+
+<main>
+
+<!-- 0. 整合做了什麼 -->
+<section id="what">
+  <h2>0. 這次整合做了什麼</h2>
+  <p class="desc">你的兩個資料夾原本各自獨立，這次把它們「連接」起來：</p>
+  <table>
+    <tr><th>檔案</th><th>原本</th><th>整合後</th></tr>
+    <tr><td><code>whatsapp-multi-llm-bot/src/llm.js</code></td><td>只支援 DeepSeek(OpenAI 兼容) / OpenAI / Gemini / Anthropic 原生，對話記憶是「記憶體暫存、重啟即清空」</td><td>新增 <code>deepseek-anthropic</code>、<code>kimi</code> 兩個 provider（取自 <code>claude/start.sh</code> 的端點），對話記憶改為<b>持久化到 <code>data/history/</code></b>，重啟後仍記得</td></tr>
+    <tr><td><code>config.js</code></td><td>只有 4 個 API key 欄位</td><td>新增 <code>deepseekAnthropic</code>、<code>kimi</code>、<code>anthropicBaseUrl</code> 設定</td></tr>
+    <tr><td><code>.env</code> / <code>.env.example</code></td><td>缺少新欄位</td><td>補上 <code>DEEPSEEK_ANTHROPIC_TOKEN</code>、<code>KIMI_ANTHROPIC_TOKEN</code> 等欄位，並填入對應 token</td></tr>
+    <tr><td><code>README.md</code></td><td>—</td><td>更新為完整文件，含模型對照表與新資料位置</td></tr>
+  </table>
+  <div class="ok">✅ 核心成果：WhatsApp bot 現在能使用你 Claude Code 正在用的 DeepSeek / Kimi 模型，且「上文下理」重啟後不會消失。</div>
+</section>
+
+<!-- 1. 支援模型 -->
+<section id="providers">
+  <h2>1. 支援的模型 provider</h2>
+  <p class="desc">用管理員指令 <code>/model &lt;名稱&gt;</code> 即可切換，例如 <code>/model kimi</code>。</p>
+  <table>
+    <tr><th>provider 名稱</th><th>底層 API</th><th>預設模型</th><th>需要的 key</th></tr>
+    <tr><td><code>deepseek</code></td><td>DeepSeek OpenAI 兼容</td><td><code>deepseek-v4-flash</code></td><td><code>DEEPSEEK_API_KEY</code></td></tr>
+    <tr><td><code>deepseek-anthropic</code></td><td>DeepSeek Anthropic 兼容（連 Claude Code）</td><td><code>deepseek-v4-pro[1m]</code></td><td><code>DEEPSEEK_ANTHROPIC_TOKEN</code> 或 <code>DEEPSEEK_API_KEY</code></td></tr>
+    <tr><td><code>kimi</code></td><td>Moonshot Kimi Anthropic 兼容（連 Claude Code）</td><td><code>kimi-k3[1m]</code></td><td><code>KIMI_ANTHROPIC_TOKEN</code></td></tr>
+    <tr><td><code>openai</code></td><td>OpenAI</td><td><code>gpt-4o-mini</code></td><td><code>OPENAI_API_KEY</code></td></tr>
+    <tr><td><code>google</code></td><td>Google Gemini</td><td><code>gemini-2.5-flash</code></td><td><code>GOOGLE_API_KEY</code></td></tr>
+    <tr><td><code>anthropic</code></td><td>Anthropic 原生（可自訂 <code>ANTHROPIC_BASE_URL</code>）</td><td><code>claude-haiku-4-5</code></td><td><code>ANTHROPIC_API_KEY</code></td></tr>
+  </table>
+  <div class="note">
+    💡 <code>deepseek-anthropic</code> 與 <code>kimi</code> 的端點、模型名，完全對應你 <code>~/claude/start.sh</code> 裡 DeepSeek（<code>api.deepseek.com/anthropic</code>）與 Kimi（<code>api.moonshot.ai/anthropic</code>）的設定。
+  </div>
+</section>
+
+<!-- 2. 前置需求 -->
+<section id="req">
+  <h2>2. 前置需求</h2>
+  <table>
+    <tr><th>項目</th><th>說明</th></tr>
+    <tr><td>一台機</td><td>macOS / Linux / Windows(WSL) 皆可；建議 2GB RAM 以上</td></tr>
+    <tr><td>Node.js</td><td>版本 <b>≥ 18</b>（含 npm）</td></tr>
+    <tr><td>獨立 WhatsApp 號碼</td><td>給 bot 專用，<b>不要用主力號碼</b>（有被封風險）</td></tr>
+    <tr><td>AI API Key</td><td>至少一個（DeepSeek / Kimi / OpenAI / Gemini / Anthropic 任一）</td></tr>
+  </table>
+  <div class="danger">
+    ⚠️ 三個務必記住：<br>
+    1. <b>用獨立號碼</b>登入 bot，別用自己的私人號碼。<br>
+    2. <code>data/auth</code> 資料夾 = 登入憑證，洩漏等於帳號被劫持，要備份好。<br>
+    3. API Key 是<b>按用量計費</b>的，別外流。
+  </div>
+</section>
+
+<!-- 3. 安裝流程 -->
+<section id="install">
+  <h2>3. 安裝流程</h2>
+
+  <div class="step"><div class="num">1</div><div class="body">
+    <b>安裝 Node.js</b>（已裝可跳過，先確認版本）
+    <pre><code>node -v        # 需顯示 v18 或以上
+npm -v</code></pre>
+    <p style="font-size:13px;color:var(--muted);">macOS 用 Homebrew：<code>brew install node</code>；或到 <code>nodejs.org</code> 下載安裝。</p>
+  </div></div>
+
+  <div class="step"><div class="num">2</div><div class="body">
+    <b>取得專案代碼</b><br>
+    把 <code>whatsapp-multi-llm-bot</code> 資料夾複製到部署機上，進入：
+    <pre><code>cd whatsapp-multi-llm-bot</code></pre>
+  </div></div>
+
+  <div class="step"><div class="num">3</div><div class="body">
+    <b>安裝依賴</b>
+    <pre><code>npm install</code></pre>
+    <p style="font-size:13px;color:var(--muted);">看到 <code>added N packages</code> 即成功。</p>
+  </div></div>
+
+  <div class="step"><div class="num">4</div><div class="body">
+    <b>建立設定檔</b>
+    <pre><code>cp .env.example .env</code></pre>
+    然後用文字編輯器打開 <code>.env</code>，照下一節填寫。
+  </div></div>
+</section>
+
+<!-- 4. 設定 .env -->
+<section id="env">
+  <h2>4. 設定 .env（欄位對照表）</h2>
+  <p class="desc">用編輯器打開 <code>.env</code>，至少填 <code>ADMIN_PHONES</code> 和一個對應的 API Key。</p>
+  <table>
+    <tr><th>欄位</th><th>說明</th><th>範例</th></tr>
+    <tr><td><code>ADMIN_PHONES</code></td><td>管理員電話（國碼+號碼，逗號分隔），可拉群、用指令</td><td>85291234567,85298765432</td></tr>
+    <tr><td><code>TRIGGER_SYMBOL</code></td><td>群組觸發符號（訊息前綴）</td><td>!</td></tr>
+    <tr><td><code>TRIGGER_PASSPHRASE</code></td><td>群組觸發暗號（訊息內含此字串即觸發）</td><td>（留空 = 不用暗號）</td></tr>
+    <tr><td><code>LLM_PROVIDER</code></td><td>預設模型：<code>deepseek</code> / <code>deepseek-anthropic</code> / <code>kimi</code> / <code>openai</code> / <code>google</code> / <code>anthropic</code></td><td>kimi</td></tr>
+    <tr><td><code>LLM_MODEL</code></td><td>指定模型名（留空用預設）</td><td>（可留空）</td></tr>
+    <tr><td><code>DEEPSEEK_API_KEY</code></td><td>DeepSeek 金鑰</td><td>sk-...</td></tr>
+    <tr><td><code>DEEPSEEK_ANTHROPIC_TOKEN</code></td><td>DeepSeek Anthropic 端點 token（同 Claude Code 用的）</td><td>（可留空，會自動沿用 DEEPSEEK_API_KEY）</td></tr>
+    <tr><td><code>KIMI_ANTHROPIC_TOKEN</code></td><td>Kimi（Moonshot）Anthropic 端點 token</td><td>sk-...</td></tr>
+    <tr><td><code>OPENAI_API_KEY</code></td><td>OpenAI 金鑰</td><td>sk-...</td></tr>
+    <tr><td><code>GOOGLE_API_KEY</code></td><td>Google Gemini 金鑰</td><td>AIza...</td></tr>
+    <tr><td><code>ANTHROPIC_API_KEY</code></td><td>Claude 金鑰</td><td>sk-ant-...</td></tr>
+    <tr><td><code>SYSTEM_PROMPT</code></td><td>自訂 AI 系統提示詞（留空用預設客服）</td><td>（可留空）</td></tr>
+  </table>
+
+  <div class="note">
+    💡 若用 <code>deepseek-anthropic</code>：<code>DEEPSEEK_ANTHROPIC_TOKEN</code> 與 <code>DEEPSEEK_API_KEY</code> 是同一把 key（<code>sk-c488...</code>），可只填 <code>DEEPSEEK_API_KEY</code> 即可。<br>
+    若用 <code>kimi</code>：需填 <code>KIMI_ANTHROPIC_TOKEN</code>（對應 <code>start.sh</code> 裡 Kimi 的 <code>ANTHROPIC_AUTH_TOKEN</code>）。
+  </div>
+</section>
+
+<!-- 5. 啟動登入 -->
+<section id="start">
+  <h2>5. 啟動並登入</h2>
+  <div class="step"><div class="num">1</div><div class="body">
+    <b>啟動程式</b>
+    <pre><code>npm start</code></pre>
+    終端機會顯示一個 <b>QR Code</b>。
+  </div></div>
+  <div class="step"><div class="num">2</div><div class="body">
+    <b>掃 QR 登入</b><br>
+    用「bot 的獨立號碼」手機，打開 WhatsApp → 設定 → <b>已連結的裝置（多裝置）</b> → 掃描 QR。
+  </div></div>
+  <div class="step"><div class="num">3</div><div class="body">
+    <b>確認連線</b><br>
+    看到這行代表成功：
+    <pre><code>✅ Bot 已連線，號碼: 852xxxxxxxx:xx@s.whatsapp.net</code></pre>
+  </div></div>
+
+  <div class="warn">
+    ⚠️ QR 碼幾分鐘會過期，過期就重跑 <code>npm start</code> 重新掃。<br>
+    掃碼後如果幾秒就斷線重連，通常是號碼沒開「多裝置」或用了主力號被 WhatsApp 限制。
+  </div>
+</section>
+
+<!-- 6. Docker 部署 -->
+<section id="docker">
+  <h2>6. Docker 部署（可選，推薦長開）</h2>
+  <p class="desc">不想一直開著終端機，就用 Docker 背景執行、開機自啟。</p>
+  <pre><code>cd whatsapp-multi-llm-bot
+cp .env.example .env      # 先填好 .env
+docker compose up -d --build
+docker compose logs -f bot   # 第一次看 QR，掃碼登入</code></pre>
+  <p style="font-size:13px;color:var(--muted);">之後日常管理：<code>docker compose logs -f bot</code> 看狀態、<code>docker compose restart bot</code> 重啟。</p>
+</section>
+
+<!-- 7. 驗證 -->
+<section id="verify">
+  <h2>7. 驗證是否成功</h2>
+  <ol style="font-size:14px;">
+    <li>用<b>管理員號碼</b>私訊 bot 隨便問一句，例如「你好」，應該收到 AI 回覆。</li>
+    <li>用管理員號碼打 <code>/help</code>，應該收到指令清單。</li>
+    <li>用管理員號碼打 <code>/model kimi</code>，確認可切換到 Kimi。</li>
+    <li>把 bot 拉進一個測試群，看到「🤖 已加入」即拉群授權正常。</li>
+    <li>在群內打 <code>!測試</code>（前綴符號），應該收到回覆。</li>
+    <li>重啟程式後，再問一次「我們剛剛講到哪」，bot 應該還記得（上下文已持久化）。</li>
+  </ol>
+  <div class="ok">✅ 以上步驟都過，代表整合成功，可以正式使用。</div>
+</section>
+
+<!-- 8. 使用手冊 -->
+<section id="manual">
+  <h2>8. 使用手冊</h2>
+
+  <h3>8.1 角色與權限</h3>
+  <table>
+    <tr><th>身分</th><th>能做什麼</th></tr>
+    <tr><td><b>管理員</b>（老闆/員工）</td><td>拉群、授權、封鎖、切模型、查名單</td></tr>
+    <tr><td><b>受權客人</b></td><td>問問題（私訊直接問、群組用暗號）</td></tr>
+    <tr><td><b>未受權</b></td><td>一概不理</td></tr>
+  </table>
+
+  <h3>8.2 管理員指令（私訊或群組內打）</h3>
+  <table>
+    <tr><th>指令</th><th>作用</th></tr>
+    <tr><td><code>/help</code></td><td>顯示指令說明</td></tr>
+    <tr><td><code>/admin 852xxxxxxxx</code></td><td>設為管理員</td></tr>
+    <tr><td><code>/allow 852xxxxxxxx</code></td><td>授權可問問題</td></tr>
+    <tr><td><code>/remove 852xxxxxxxx</code></td><td>移除授權</td></tr>
+    <tr><td><code>/ban 852xxxxxxxx</code></td><td>封鎖</td></tr>
+    <tr><td><code>/unban 852xxxxxxxx</code></td><td>解除封鎖</td></tr>
+    <tr><td><code>/model &lt;名稱&gt;</code></td><td>切換模型（deepseek / deepseek-anthropic / kimi / openai / google / anthropic）</td></tr>
+    <tr><td><code>/list</code></td><td>查看受權名單、黑名單、群組</td></tr>
+    <tr><td><code>/clear</code></td><td>清除當前對話記憶</td></tr>
+    <tr><td><code>/leave</code></td><td>bot 退出當前群組（群組內用）</td></tr>
+  </table>
+
+  <h3>8.3 客人怎麼問問題</h3>
+  <ul style="font-size:14px;">
+    <li><b>私訊</b>：受權客人直接問即可。</li>
+    <li><b>群組</b>：打前綴符號（預設 <code>!</code>）、或 <code>@提及 bot</code>、或說暗號（若設了）才會回答。</li>
+  </ul>
+
+  <h3>8.4 資料位置（要備份的）</h3>
+  <table>
+    <tr><th>路徑</th><th>內容</th></tr>
+    <tr><td><code>data/auth/</code></td><td>登入憑證（session），洩漏=帳號被劫持，備份請加密</td></tr>
+    <tr><td><code>data/state.json</code></td><td>受權名單 / 黑名單 / 群組 / 管理員</td></tr>
+    <tr><td><code>data/history/</code></td><td>每個對話的上下文記憶（<b>新增</b>，重啟不丟）</td></tr>
+  </table>
+</section>
+
+<!-- 9. 常見問題 -->
+<section id="faq">
+  <h2>9. 常見問題</h2>
+  <table>
+    <tr><th>症狀</th><th>原因 / 解法</th></tr>
+    <tr><td>QR 碼不顯示</td><td>Node 版本太舊（需 ≥18）；重新 <code>npm install</code></td></tr>
+    <tr><td>掃碼後秒斷、一直重連</td><td>號碼未開「多裝置」；或用了受限號碼。改用獨立號碼重試</td></tr>
+    <tr><td>AI 回「暫時無法回答」</td><td>API Key 沒填/填錯，或模型名過時。看終端 log 的錯誤訊息</td></tr>
+    <tr><td>切到 <code>kimi</code> 後報錯</td><td><code>KIMI_ANTHROPIC_TOKEN</code> 未填。填上 <code>start.sh</code> 裡 Kimi 的 token 後重跑</td></tr>
+    <tr><td>切到 <code>deepseek-anthropic</code> 後報錯</td><td>確認 <code>DEEPSEEK_API_KEY</code> 已填（會自動沿用）</td></tr>
+    <tr><td>報 <code>model not found</code></td><td>模型名改了，填正確名到 <code>LLM_MODEL</code></td></tr>
+    <tr><td>帳號被封</td><td>換備用號碼，刪 <code>data/auth</code> 後重跑重掃</td></tr>
+    <tr><td>要換 bot 號碼</td><td>停掉程式 → 刪 <code>data/auth</code> → 重跑 → 新號碼掃碼</td></tr>
+    <tr><td>重啟後不記得對話</td><td>現在已持久化到 <code>data/history/</code>，正常情況重啟仍記得；若仍不記，檢查該資料夾是否有寫入權限</td></tr>
+  </table>
+</section>
+
+</main>
+</body>
+</html>
