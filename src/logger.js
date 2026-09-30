@@ -47,3 +47,11 @@ export function logMessage({ jid, sender, role, text }) {
   const from = role === 'in' ? `來自 ${sender}` : `回覆 ${jid}`
   write(`[${timestamp()}] [${who}] ${from} | ${text}`)
 }
+
+// LLM 呼叫記錄：provider / model / 耗時 / token 用量，成功或失敗都會寫
+export function logLlm({ provider, model, ms, tokens = '', error = '' }) {
+  const status = error
+    ? `❌ ${String(error).slice(0, 2000)}`
+    : `✅ tokens=${tokens || '-'}`
+  write(`[${timestamp()}] [LLM] ${provider}/${model} 耗時=${ms}ms ${status}`)
+}

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import config from '../config.js'
+import { logLlm, logError } from './logger.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const HISTORY_DIR = path.resolve(__dirname, '../data/history')
@@ -61,7 +62,10 @@ async function openaiCompat({ url, apiKey, model, system, history }) {
   })
   const data = await res.json()
   if (!res.ok) throw new Error(`OpenAI 兼容 API 錯誤: ${JSON.stringify(data)}`)
-  return data.choices?.[0]?.message?.content || ''
+  const text = data.choices?.[0]?.message?.content || ''
+  const u = data.usage
+  const tokens = u ? `in=${u.prompt_tokens} out=${u.completion_tokens}` : ''
+  return { text, tokens }
 }
 
 async function anthropicChat({ url, apiKey, model, system, history }) {
@@ -83,7 +87,10 @@ async function anthropicChat({ url, apiKey, model, system, history }) {
   if (!res.ok) throw new Error(`Anthropic 錯誤: ${JSON.stringify(data)}`)
   // DeepSeek/Kimi 的 Anthropic 端點會先回 thinking 區塊，需抓 type === 'text' 的內容
   const textBlocks = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text || '')
-  return textBlocks.join('').trim() || ''
+  const text = textBlocks.join('').trim() || ''
+  const u = data.usage
+  const tokens = u ? `in=${u.input_tokens} out=${u.output_tokens}` : ''
+  return { text, tokens }
 }
 
 async function googleChat({ apiKey, model, system, history }) {
@@ -101,20 +108,33 @@ async function googleChat({ apiKey, model, system, history }) {
   })
   const data = await res.json()
   if (!res.ok) throw new Error(`Google 錯誤: ${JSON.stringify(data)}`)
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+  const u = data.usageMetadata
+  const tokens = u ? `in=${u.promptTokenCount} out=${u.candidatesTokenCount}` : ''
+  return { text, tokens }
 }
 
 export async function chat(provider, model, system, history) {
   const p = PROVIDERS[provider]
-  if (!p) throw new Error(`未知 provider: ${provider}`)
-  const apiKey = p.key()
-  if (!apiKey) throw new Error(`缺少 ${provider} 的 API key`)
-  const m = model || p.defaultModel
+  const m = model || p?.defaultModel || ''
+  const start = Date.now()
+  try {
+    if (!p) throw new Error(`未知 provider: ${provider}`)
+    const apiKey = p.key()
+    if (!apiKey) throw new Error(`缺少 ${provider} 的 API key`)
 
-  if (p.type === 'openai') return openaiCompat({ url: p.url, apiKey, model: m, system, history })
-  if (p.type === 'anthropic') return anthropicChat({ url: p.url, apiKey, model: m, system, history })
-  if (p.type === 'google') return googleChat({ apiKey, model: m, system, history })
-  throw new Error('未知 provider 類型')
+    let result
+    if (p.type === 'openai') result = await openaiCompat({ url: p.url, apiKey, model: m, system, history })
+    else if (p.type === 'anthropic') result = await anthropicChat({ url: p.url, apiKey, model: m, system, history })
+    else if (p.type === 'google') result = await googleChat({ apiKey, model: m, system, history })
+    else throw new Error('未知 provider 類型')
+
+    logLlm({ provider, model: m, ms: Date.now() - start, tokens: result.tokens })
+    return result.text
+  } catch (e) {
+    logLlm({ provider, model: m, ms: Date.now() - start, error: e.message })
+    throw e
+  }
 }
 
 // ---- 對話記憶（持久化到 data/history/，重啟後仍記得上文下理）----
@@ -130,7 +150,7 @@ function loadHistory(jid) {
       if (Array.isArray(arr)) return arr.slice(-HISTORY_LIMIT)
     }
   } catch (e) {
-    console.error('讀取對話記憶失敗:', e.message)
+    logError(`讀取對話記憶失敗 (${jid}): ${e.message}`)
   }
   return []
 }
@@ -140,7 +160,7 @@ function saveHistory(jid, arr) {
     fs.mkdirSync(HISTORY_DIR, { recursive: true })
     fs.writeFileSync(historyFile(jid), JSON.stringify(arr.slice(-HISTORY_LIMIT), null, 2))
   } catch (e) {
-    console.error('寫入對話記憶失敗:', e.message)
+    logError(`寫入對話記憶失敗 (${jid}): ${e.message}`)
   }
 }
 
@@ -158,6 +178,6 @@ export function clearHistory(jid) {
   try {
     if (fs.existsSync(historyFile(jid))) fs.unlinkSync(historyFile(jid))
   } catch (e) {
-    console.error('清除對話記憶失敗:', e.message)
+    logError(`清除對話記憶失敗 (${jid}): ${e.message}`)
   }
 }

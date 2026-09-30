@@ -21,7 +21,7 @@ async function resolveGroupSender(sock, jid, rawJid) {
     const meta = await sock.groupMetadata(jid)
     registerFromGroupMetadata(meta)
   } catch (e) {
-    console.error('抓取群組 metadata 失敗:', e.message)
+    logError('抓取群組 metadata 失敗: ' + e.message)
   }
   return phoneFromLid(rawJid) || normalizePhone(rawJid)
 }
@@ -123,7 +123,7 @@ export async function handleMessage(sock, msg) {
     await sock.sendMessage(jid, { text: reply })
   } catch (e) {
     console.error('LLM 錯誤:', e.message)
-    logError(`LLM 錯誤: ${e.message}`)
+    logError(`LLM 錯誤 (${config.llmProvider}/${config.llmModel || '預設'}): ${e.message}`)
     await sock.sendMessage(jid, { text: '⚠️ 暫時無法回答，請稍後再試。' })
   } finally {
     await sock.sendPresenceUpdate('paused', jid)
@@ -223,7 +223,7 @@ async function handleToolCommand(sock, jid, clean) {
       return reply
     }
   } catch (e) {
-    logError(`工具執行失敗: ${e.message}`)
+    logError(`工具執行失敗 (${matched}): ${e.message}`)
     return `⚠️ 工具執行失敗：${e.message}`
   }
   return null

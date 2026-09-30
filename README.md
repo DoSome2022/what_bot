@@ -97,3 +97,50 @@ rm -rf data/auth
 
 # 2. 重新啟動（會重新印 QR Code）
 npm start
+
+
+
+
+
+  改動總覽
+
+  1. src/logger.js — 新增 logLlm() 專用函數
+
+  每次 AI 呼叫（成功或失敗）都會寫一行結構化記錄：
+
+  [時間] [LLM] deepseek-anthropic/deepseek-v4-pro[1m] 耗時=1832ms ✅ tokens=in=421 out=310
+  [時間] [LLM] kimi/kimi-k3[1m] 耗時=0ms ❌ 未知 provider: ...
+
+  錯誤內容自動截斷 2000 字，避免 API 回傳的超長 body 灌爆 log 檔。
+
+  2. src/llm.js — 呼叫計時 + token 統計 + 錯誤全入 log
+
+  - chat() 包上 try/catch 計時，成功、失敗都記（之前失敗只有 handlers 記一次，成功完全沒記）
+  - 三個 adapter 現在會提取 token 用量：
+    - OpenAI 兼容（DeepSeek/OpenAI）：prompt_tokens / completion_tokens
+    - Anthropic 兼容（Claude/DeepSeek/Kimi）：input_tokens / output_tokens
+    - Gemini：promptTokenCount / candidatesTokenCount
+  - 對話記憶（history）讀取/寫入/清除失敗：從「只印 console」改為 logError 寫入 log 檔
+
+  3. src/store.js — state.json 讀寫失敗入 log 檔（原本只印 console）
+
+  4. src/handlers.js — 錯誤訊息加上下文
+
+  - LLM 錯誤現在會標明 provider/model：LLM 錯誤 (deepseek/預設): ...
+  - 工具失敗標明是哪個工具：工具執行失敗 (search): ...
+  - 群組 metadata 抓取失敗入 log 檔
+
+  5. src/index.js — 啟動失敗也會寫入 log 檔
+
+  驗證結果
+
+  - 5 個修改檔全部通過 node --check 語法檢查
+  - 用「未知 provider」觸發錯誤路徑實測，log 檔正確出現：
+  [2026-09-30T11:51:33.730Z] [LLM] smoke-test-provider/ 耗時=0ms ❌ 未知 provider: smoke-test-provider
+  - 測試行已從 log 檔清除，不會污染正式記錄
+
+  注意
+
+  現在每次 LLM 呼叫成功後，你可以在 data/logs/YYYY-MM-DD.log 看到 provider、模型、耗時、token 用量，方便監控成本（token 用量直接對應計費）和追查哪個模型出問題。
+
+  另外提醒：如果 bot 是用 Docker 跑的，程式碼是 COPY 進 image 的，需要 docker compose up -d --build 重新 build 才會生效（本機 npm start 直接重啟即可）。

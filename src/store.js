@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { logError } from './logger.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.resolve(__dirname, '../data')
@@ -21,7 +22,7 @@ function load() {
       return { ...defaults, ...JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) }
     }
   } catch (e) {
-    console.error('讀取 state.json 失敗', e.message)
+    logError('讀取 state.json 失敗: ' + e.message)
   }
   return { ...defaults }
 }
@@ -31,7 +32,7 @@ function save() {
     fs.mkdirSync(DATA_DIR, { recursive: true })
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2))
   } catch (e) {
-    console.error('寫入 state.json 失敗', e.message)
+    logError('寫入 state.json 失敗: ' + e.message)
   }
 }
 

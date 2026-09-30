@@ -75,5 +75,6 @@ async function start() {
 
 start().catch((e) => {
   console.error('啟動失敗:', e)
+  logError(`啟動失敗: ${e.message}`)
   process.exit(1)
 })
